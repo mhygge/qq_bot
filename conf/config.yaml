@@ -1,0 +1,7 @@
+appid: 102005715 
+token: kqyF13BHHbfiPeeMrITlEQkiuXllRHMg
+
+redis:
+  addr: "127.0.0.1:6379"
+  db: 2
+  password: ""
