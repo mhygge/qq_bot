@@ -169,8 +169,14 @@ func heartbeat() {
 		logrus.Info("ticker ticker ticker ... send heartbeat:[%v]\n", data)
 		if err := conn.WriteJSON(data); err != nil {
 			logrus.Errorf("heartbeat send error. %v", err)
+
 		}
 	}
+
+	//select {
+	//case err: <-
+	//
+	//}
 
 }
 
