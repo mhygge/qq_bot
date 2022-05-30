@@ -54,20 +54,27 @@ var send chan []byte
 
 // 消息处理器，持有 openapi 对象
 func Start() {
-	connectWs()
-	identify()
-	go heartbeat()
-	go listening()
+	ConnectWs()
+	Identify()
+	go Heartbeat()
+	go Listening()
 	select {}
 }
 
-func listening() {
+func Listening() {
 	for true {
 		var payload WsPayload
 		if err := conn.ReadJSON(&payload); err != nil {
 			logrus.Errorf("listen error. %v", err)
 			// 重新连接
-			resume()
+			if websocket.IsUnexpectedCloseError(err, 4009) {
+				sessionId = ""
+				seq = 0
+				ConnectWs()
+				Identify()
+			} else {
+				Resume()
+			}
 		}
 		msg, _ := json.Marshal(payload)
 		logrus.Errorf("event Received: %v.\n", string(msg))
@@ -78,6 +85,9 @@ func listening() {
 
 func opSelect(payload WsPayload) {
 	switch payload.Opcode {
+	case Constant.WSHello:
+		go Heartbeat()
+		break
 	case Constant.WSDispatchEvent:
 		// 记录消息序列号，心跳用
 		seq = payload.Seq
@@ -85,7 +95,7 @@ func opSelect(payload WsPayload) {
 		break
 	case Constant.WSReconnect:
 		logrus.Info("重新连接")
-		resume()
+		Resume()
 		break
 	case Constant.WSHeartbeatAck:
 		logrus.Info("接收到心跳响应")
@@ -104,19 +114,19 @@ func eventDispatch(payload WsPayload) {
 	case Constant.EventGuildCreate:
 		break
 	case Constant.EventAtMessageCreate:
-		sendMessage(payload.Data, Process(payload))
+		SendMessage(payload.Data, Process(payload))
 		break
 	default:
 		break
 	}
 }
 
-func sendMessage(data Data, content string) {
+func SendMessage(data Data, content string) {
 	body := make(map[string]string)
 	body["content"] = fmt.Sprintf("<@!%v>\n", data.Author.Id) + content
 	body["msg_id"] = data.Id
 	client := resty.New()
-	resp, err := client.R().SetAuthToken(getToken()).
+	resp, err := client.R().SetAuthToken(GetToken()).
 		SetAuthScheme("Bot").
 		SetPathParam("channel_id", data.ChannelId).
 		SetBody(body).Post(GetURL(messagesURI))
@@ -126,7 +136,7 @@ func sendMessage(data Data, content string) {
 	logrus.Infof("send message success,%v", resp)
 }
 
-func resume() {
+func Resume() {
 	payload := WsPayload{
 		Data: Data{
 			SessionId: sessionId,
@@ -137,11 +147,12 @@ func resume() {
 		Opcode: Constant.WSResume,
 	}
 	if err := conn.WriteJSON(&payload); err != nil {
-		logrus.Errorf("resume error. %v", err)
+		logrus.Errorf("Resume error. %v", err)
 	}
+	logrus.Infoln("resume success")
 }
 
-func identify() {
+func Identify() {
 	payload := WsPayload{
 		Data: Data{
 			SessionId: sessionId,
@@ -156,7 +167,7 @@ func identify() {
 	}
 }
 
-func heartbeat() {
+func Heartbeat() {
 
 	duration := time.Duration(heartbeatInterval) * time.Millisecond
 	ticker := time.NewTicker(duration)
@@ -166,9 +177,9 @@ func heartbeat() {
 	data["op"] = 1
 	for range ticker.C {
 		data["d"] = seq
-		logrus.Info("ticker ticker ticker ... send heartbeat:[%v]\n", data)
+		logrus.Info("ticker ticker ticker ... send Heartbeat\n")
 		if err := conn.WriteJSON(data); err != nil {
-			logrus.Errorf("heartbeat send error. %v", err)
+			logrus.Errorf("Heartbeat send error. %v", err)
 
 		}
 	}
@@ -180,7 +191,7 @@ func heartbeat() {
 
 }
 
-func connectWs() {
+func ConnectWs() {
 	url := getWsUrl()
 	c, _, err := websocket.DefaultDialer.Dial(url, nil)
 	conn = c
@@ -196,8 +207,11 @@ func connectWs() {
 	msg, _ := json.Marshal(payload)
 	logrus.Infof("const opcode:%v", string(msg))
 	heartbeatInterval = payload.Data.HeartbeatInterval
-
 }
+
+//func CloseWs() {
+// conn.
+//}
 
 type WebsocketAP struct {
 	URL string `json:"url"`
@@ -205,7 +219,7 @@ type WebsocketAP struct {
 
 func getWsUrl() string {
 	client := resty.New()
-	resp, err := client.R().SetAuthToken(getToken()).SetAuthScheme(BOT).SetResult(WebsocketAP{}).Get(GetURL(gatewayURI))
+	resp, err := client.R().SetAuthToken(GetToken()).SetAuthScheme(BOT).SetResult(WebsocketAP{}).Get(GetURL(gatewayURI))
 	if err != nil {
 		logrus.Errorf("request gateway failed,err: %v", err)
 		os.Exit(-1)
@@ -213,7 +227,7 @@ func getWsUrl() string {
 	return resp.Result().(*WebsocketAP).URL
 }
 
-func getToken() string {
+func GetToken() string {
 	var conf struct {
 		AppID string `yaml:"appid"`
 		Token string `yaml:"token"`
@@ -231,5 +245,5 @@ func getToken() string {
 	return conf.AppID + "." + conf.Token
 }
 func getBotToken() string {
-	return BOT + " " + getToken()
+	return BOT + " " + GetToken()
 }

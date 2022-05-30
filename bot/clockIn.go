@@ -2,7 +2,6 @@ package bot
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	redisUtil "github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
@@ -51,13 +50,16 @@ func Process(payload WsPayload) string {
 			Score:  float64(time.Now().Unix()),
 			Member: payload.Data.Author.Username,
 		})
-		redis.GlobalRedis.ZIncrBy(ctx, "week", 1, payload.Data.Author.Username)
+		//位次
+		rank := redis.GlobalRedis.ZRank(ctx, "today", payload.Data.Author.Username).Val()
+		redis.GlobalRedis.ZIncrBy(ctx, "week", 1-float64(rank)/100000, payload.Data.Author.Username)
 		return fmt.Sprintf("签到成功,本月共签到: %v次", count)
 	} else if content == "本周统计" {
 		monday := now.Day() - int(now.Weekday())
 
 		field := redis.GlobalRedis.BitField(ctx, key, "GET", "u7", monday)
 		formatInt := strconv.FormatInt(field.Val()[0], 2)
+		//补0到7位
 		if len(formatInt) < 7 {
 			for i := 0; i < 7-len(formatInt); i++ {
 				formatInt = "0" + formatInt
@@ -86,12 +88,7 @@ func Process(payload WsPayload) string {
 		}
 		return strings.Join(result, ",")
 	} else {
-		return "请输入\"签到\"或\"本周统计\"或\"排行\""
+		return "请输入\"签到\"或\"本周统计\"或\"日排行\"或\"周排行\""
 	}
 
-}
-func Int64ToBytes(i int64) []byte {
-	var buf = make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, uint64(i))
-	return buf
 }
