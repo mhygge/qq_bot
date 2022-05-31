@@ -71,11 +71,8 @@ func Listening() {
 				seq = 0
 				ConnectWs()
 				Identify()
-			} else {
-				//4009允许重连
-				ConnectWs()
-				Resume()
 			}
+			continue
 		}
 		msg, _ := json.Marshal(payload)
 		logrus.Infof("event Received: %v.\n", string(msg))
