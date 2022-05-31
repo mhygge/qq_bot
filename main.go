@@ -14,12 +14,10 @@ func main() {
 	bot.Start()
 	ctx := context.Background()
 	c := cron.New(cron.WithSeconds())
-	dailySpec := "@daily"
-	c.AddFunc(dailySpec, func() {
+	c.AddFunc("@daily", func() {
 		redis.GlobalRedis.Del(ctx, "today")
 	})
-	weeklySpec := "@weekly"
-	c.AddFunc(weeklySpec, func() {
+	c.AddFunc("@weekly", func() {
 		redis.GlobalRedis.Del(ctx, "week")
 	})
 

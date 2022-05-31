@@ -66,19 +66,19 @@ func Listening() {
 		var payload WsPayload
 		if err := conn.ReadJSON(&payload); err != nil {
 			logrus.Errorf("listen error. %v", err)
-			// 重新连接
 			if websocket.IsUnexpectedCloseError(err, 4009) {
 				sessionId = ""
 				seq = 0
 				ConnectWs()
 				Identify()
 			} else {
+				//4009允许重连
+				ConnectWs()
 				Resume()
 			}
 		}
 		msg, _ := json.Marshal(payload)
-		logrus.Errorf("event Received: %v.\n", string(msg))
-
+		logrus.Infof("event Received: %v.\n", string(msg))
 		opSelect(payload)
 	}
 }
@@ -95,6 +95,7 @@ func opSelect(payload WsPayload) {
 		break
 	case Constant.WSReconnect:
 		logrus.Info("重新连接")
+		ConnectWs()
 		Resume()
 		break
 	case Constant.WSHeartbeatAck:
@@ -116,6 +117,8 @@ func eventDispatch(payload WsPayload) {
 	case Constant.EventAtMessageCreate:
 		SendMessage(payload.Data, Process(payload))
 		break
+	case "RESUMED":
+		logrus.Info("received RESUMED message")
 	default:
 		break
 	}
@@ -148,6 +151,7 @@ func Resume() {
 	}
 	if err := conn.WriteJSON(&payload); err != nil {
 		logrus.Errorf("Resume error. %v", err)
+		return
 	}
 	logrus.Infoln("resume success")
 }
@@ -183,11 +187,6 @@ func Heartbeat() {
 
 		}
 	}
-
-	//select {
-	//case err: <-
-	//
-	//}
 
 }
 

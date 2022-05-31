@@ -3,7 +3,6 @@ package main
 import (
 	"qq_bot/bot"
 	"testing"
-	"time"
 )
 
 func TestBot(t *testing.T) {
@@ -21,8 +20,9 @@ func TestBot(t *testing.T) {
 	t.Run("resume", func(t *testing.T) {
 		bot.ConnectWs()
 		//心跳为41秒
-		time.Sleep(1 * time.Minute)
+		//time.Sleep(1 * time.Minute)
 		bot.Resume()
+		bot.Listening()
 	})
 	t.Run("heartBeat", func(t *testing.T) {
 		bot.ConnectWs()
