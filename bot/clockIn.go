@@ -3,9 +3,9 @@ package bot
 import (
 	"context"
 	"fmt"
-	redisUtil "github.com/go-redis/redis/v8"
+	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
-	"qq_bot/redis"
+	client "qq_bot/redis"
 	"strconv"
 	"strings"
 	"time"
@@ -16,18 +16,21 @@ const (
 	botAtInfo = "<@!9681314665609974950> "
 )
 
+//解耦
+var nowFn = time.Now
+
 func Process(payload WsPayload) string {
 	content := strings.Replace(payload.Data.Content, botAtInfo, "", -1)
 	//if content != "签到" {
 	//	return "请输入\"签到\""
 	//}
 	ctx := context.Background()
-	now := time.Now()
+	now := nowFn()
 	key := fmt.Sprintf(singKey, payload.Data.Author.Id, now.Year(), now.Month())
 	if content == "签到" {
 
 		offset := int64(now.Day())
-		bit, err := redis.GlobalRedis.GetBit(ctx, key, offset).Uint64()
+		bit, err := client.GlobalRedis.GetBit(ctx, key, offset).Uint64()
 		if err != nil {
 			logrus.Errorf("get redis key error,%v", err)
 			return "server error"
@@ -35,29 +38,29 @@ func Process(payload WsPayload) string {
 		if bit == 1 {
 			return "今日已签到，请勿重复操作"
 		}
-		_, err = redis.GlobalRedis.SetBit(ctx, key, offset, 1).Result()
+		_, err = client.GlobalRedis.SetBit(ctx, key, offset, 1).Result()
 		if err != nil {
 			logrus.Errorf("SetBit fail uid=%s|key=%s|offset=%d|err=%s", payload.Data.Author.Id, key, offset, err)
 			return "server error"
 		}
 
-		count, err := redis.GlobalRedis.BitCount(ctx, key, nil).Result()
+		count, err := client.GlobalRedis.BitCount(ctx, key, nil).Result()
 		if err != nil {
 			logrus.Errorf("BitCount fail key=%s|err=%s", key, err)
 			return "server error"
 		}
-		redis.GlobalRedis.ZAddNX(ctx, "today", &redisUtil.Z{
+		client.GlobalRedis.ZAddNX(ctx, "today", &redis.Z{
 			Score:  float64(time.Now().Unix()),
 			Member: payload.Data.Author.Username,
 		})
 		//位次
-		rank := redis.GlobalRedis.ZRank(ctx, "today", payload.Data.Author.Username).Val()
-		redis.GlobalRedis.ZIncrBy(ctx, "week", 1-float64(rank)/100000, payload.Data.Author.Username)
+		rank := client.GlobalRedis.ZRank(ctx, "today", payload.Data.Author.Username).Val()
+		client.GlobalRedis.ZIncrBy(ctx, "week", 1-float64(rank)/100000, payload.Data.Author.Username)
 		return fmt.Sprintf("签到成功,本月共签到: %v次", count)
 	} else if content == "本周统计" {
 		monday := now.Day() - int(now.Weekday())
 
-		field := redis.GlobalRedis.BitField(ctx, key, "GET", "u7", monday)
+		field := client.GlobalRedis.BitField(ctx, key, "GET", "u7", monday)
 		formatInt := strconv.FormatInt(field.Val()[0], 2)
 		//补0到7位
 		if len(formatInt) < 7 {
@@ -76,13 +79,13 @@ func Process(payload WsPayload) string {
 		}
 		return fmt.Sprintf("本周第%s天打卡，第%s天未打卡", strings.Join(signedDays, ","), strings.Join(unSignedDays, ","))
 	} else if content == "日排行" {
-		result, err := redis.GlobalRedis.ZRange(ctx, "today", 0, 9).Result()
+		result, err := client.GlobalRedis.ZRange(ctx, "today", 0, 9).Result()
 		if err != nil {
 			return ""
 		}
 		return strings.Join(result, ",")
 	} else if content == "周排行" {
-		result, err := redis.GlobalRedis.ZRevRange(ctx, "week", 0, 9).Result()
+		result, err := client.GlobalRedis.ZRevRange(ctx, "week", 0, 9).Result()
 		if err != nil {
 			return ""
 		}

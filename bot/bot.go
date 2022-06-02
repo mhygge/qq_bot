@@ -76,11 +76,11 @@ func Listening() {
 		}
 		msg, _ := json.Marshal(payload)
 		logrus.Infof("event Received: %v.\n", string(msg))
-		opSelect(payload)
+		OpSelect(payload)
 	}
 }
 
-func opSelect(payload WsPayload) {
+func OpSelect(payload WsPayload) {
 	switch payload.Opcode {
 	case Constant.WSHello:
 		go Heartbeat()
